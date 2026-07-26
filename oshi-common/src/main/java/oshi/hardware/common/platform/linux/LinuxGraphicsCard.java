@@ -221,6 +221,7 @@ public abstract class LinuxGraphicsCard extends AbstractGraphicsCard {
         String vendor = Constants.UNKNOWN;
         List<String> versionInfoList = new ArrayList<>();
         boolean found = false;
+        String slot = null;
         String lookupDevice = null;
         for (String line : lspci) {
             String[] split = line.trim().split(":", 2);
@@ -228,14 +229,17 @@ public abstract class LinuxGraphicsCard extends AbstractGraphicsCard {
             // Skip until line contains "VGA" or "3D controller"
             if (prefix.equals("Class") && (line.contains("VGA") || line.contains("3D controller"))) {
                 found = true;
-                lookupDevice = null;
+                // The Slot line precedes Class within a record, so this is the slot of the record
+                // we are entering. Discarding it here would leave every card without a PCI slot,
+                // skipping the VRAM lookup and collapsing all cards onto the same DRM device.
+                lookupDevice = slot;
                 name = Constants.UNKNOWN;
                 deviceId = Constants.UNKNOWN;
                 vendor = Constants.UNKNOWN;
                 versionInfoList.clear();
             } else if (prefix.equals("Slot") && split.length > 1) {
                 // Capture PCI slot address (e.g. "01:00.0") for use with lspci -s
-                lookupDevice = split[1].trim();
+                slot = split[1].trim();
             }
             if (found) {
                 if (split.length < 2) {
@@ -265,6 +269,10 @@ public abstract class LinuxGraphicsCard extends AbstractGraphicsCard {
                         versionInfoList.add(line.trim());
                     }
                 }
+            }
+            if (split.length < 2) {
+                // Record boundary; the next record must supply its own Slot line
+                slot = null;
             }
         }
         // If we haven't yet written the last card do so now

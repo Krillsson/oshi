@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -240,6 +241,49 @@ class LinuxGraphicsCardTest {
         List<GraphicsCard> cards = LinuxGraphicsCard.getGraphicsCardsFromLspci(threeD, STUB_FACTORY, NO_VRAM, NO_DRM);
         assertThat(cards.size(), is(1));
         assertThat(cards.get(0).getName(), is("Tesla V100"));
+    }
+
+    @Test
+    void testGetGraphicsCardsFromLspciPassesEachSlotToLookups() {
+        List<String> twoCards = Arrays.asList("Slot:\t00:02.0", "Class:\tVGA compatible controller [0300]",
+                "Vendor:\tIntel Corporation [8086]", "Device:\tUHD Graphics 630 [3E92]", "Rev:\t00", "",
+                "Slot:\t01:00.0", "Class:\tVGA compatible controller [0300]", "Vendor:\tNVIDIA Corporation [10de]",
+                "Device:\tGA102 [GeForce RTX 3090] [2204]", "Rev:\ta1", "");
+
+        List<String> drmSlots = new ArrayList<>();
+        List<String> vramSlots = new ArrayList<>();
+        List<GraphicsCard> cards = LinuxGraphicsCard.getGraphicsCardsFromLspci(twoCards, STUB_FACTORY, slot -> {
+            vramSlots.add(slot);
+            return 1024L;
+        }, slot -> {
+            drmSlots.add(slot);
+            return new Triplet<>("/sys/class/drm/card0/device", "driver", slot);
+        });
+
+        // Each card must be correlated using its own PCI slot, not null and not a shared one
+        assertThat(drmSlots, is(Arrays.asList("00:02.0", "01:00.0")));
+        assertThat(vramSlots, is(Arrays.asList("00:02.0", "01:00.0")));
+        assertThat(((LinuxGraphicsCard) cards.get(0)).getPciBusId(), is("00:02.0"));
+        assertThat(((LinuxGraphicsCard) cards.get(1)).getPciBusId(), is("01:00.0"));
+        assertThat(cards.get(0).getVRam(), is(1024L));
+    }
+
+    @Test
+    void testGetGraphicsCardsFromLspciSkipsNonGraphicsSlots() {
+        List<String> mixed = Arrays.asList("Slot:\t00:11.0", "Class:\tSignal processing controller [1180]",
+                "Vendor:\tIntel Corporation [8086]", "Device:\tIntegrated Sensor Hub [a135]", "Rev:\t31", "",
+                "Slot:\t01:00.0", "Class:\tVGA compatible controller [0300]", "Vendor:\tNVIDIA Corporation [10de]",
+                "Device:\tGP107GL [Quadro P400] [1cb3]", "Rev:\ta1", "");
+
+        List<String> drmSlots = new ArrayList<>();
+        List<GraphicsCard> cards = LinuxGraphicsCard.getGraphicsCardsFromLspci(mixed, STUB_FACTORY, NO_VRAM, slot -> {
+            drmSlots.add(slot);
+            return new Triplet<>("", "", "");
+        });
+
+        assertThat(cards.size(), is(1));
+        assertThat(cards.get(0).getDeviceId(), is("0x1cb3"));
+        assertThat(drmSlots, is(Collections.singletonList("01:00.0")));
     }
 
     // -------------------------------------------------------------------------
