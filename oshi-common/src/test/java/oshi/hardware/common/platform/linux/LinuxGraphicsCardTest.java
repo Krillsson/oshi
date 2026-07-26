@@ -286,6 +286,34 @@ class LinuxGraphicsCardTest {
         assertThat(drmSlots, is(Collections.singletonList("01:00.0")));
     }
 
+    @Test
+    void testIsDisplayClass() {
+        assertThat(LinuxGraphicsCard.isDisplayClass("VGA compatible controller [0300]"), is(true));
+        assertThat(LinuxGraphicsCard.isDisplayClass("3D controller [0302]"), is(true));
+        assertThat(LinuxGraphicsCard.isDisplayClass("Display controller [0380]"), is(true));
+        // Contains "VGA" but is PCI class 0x0000, not a graphics card
+        assertThat(LinuxGraphicsCard.isDisplayClass("Non-VGA unclassified device [0000]"), is(false));
+        assertThat(LinuxGraphicsCard.isDisplayClass("Signal processing controller [1180]"), is(false));
+        assertThat(LinuxGraphicsCard.isDisplayClass("Host bridge [0600]"), is(false));
+        // Without numeric class codes, fall back to the class name
+        assertThat(LinuxGraphicsCard.isDisplayClass("VGA compatible controller"), is(true));
+        assertThat(LinuxGraphicsCard.isDisplayClass("Non-VGA unclassified device"), is(false));
+    }
+
+    @Test
+    void testGetGraphicsCardsFromLspciIgnoresNonVgaUnclassifiedDevice() {
+        // PCI class 0x0000 renders as "Non-VGA unclassified device", which contains "VGA"
+        List<String> lspci = Arrays.asList("Slot:\t00:13.0", "Class:\tNon-VGA unclassified device [0000]",
+                "Vendor:\tIntel Corporation [8086]",
+                "Device:\t100 Series/C230 Series Chipset Family Integrated Sensor Hub [a135]", "Rev:\t31", "",
+                "Slot:\t01:00.0", "Class:\tVGA compatible controller [0300]", "Vendor:\tNVIDIA Corporation [10de]",
+                "Device:\tGP107GL [Quadro P400] [1cb3]", "Rev:\ta1", "");
+
+        List<GraphicsCard> cards = LinuxGraphicsCard.getGraphicsCardsFromLspci(lspci, STUB_FACTORY, NO_VRAM, NO_DRM);
+        assertThat(cards.size(), is(1));
+        assertThat(cards.get(0).getDeviceId(), is("0x1cb3"));
+    }
+
     // -------------------------------------------------------------------------
     // queryLspciMemorySize parsing
     // -------------------------------------------------------------------------

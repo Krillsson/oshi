@@ -199,7 +199,9 @@ public abstract class LinuxGraphicsCard extends AbstractGraphicsCard {
 
     // Faster, use as primary
     private static List<GraphicsCard> getGraphicsCardsFromLspci(Function<Attrs, GraphicsCard> factory) {
-        return getGraphicsCardsFromLspci(ExecutingCommand.runNative("lspci -vnnm"), factory,
+        // -mm is the stable machine-readable format, which labels the slot field "Slot:". The
+        // obsolete single -m form labels it "Device:", colliding with the device name field.
+        return getGraphicsCardsFromLspci(ExecutingCommand.runNative("lspci -vnnmm"), factory,
                 slot -> queryLspciMemorySize(ExecutingCommand.runNative("lspci -v -s " + slot)),
                 LinuxGraphicsCard::findDrmInfo);
     }
@@ -226,8 +228,8 @@ public abstract class LinuxGraphicsCard extends AbstractGraphicsCard {
         for (String line : lspci) {
             String[] split = line.trim().split(":", 2);
             String prefix = split[0];
-            // Skip until line contains "VGA" or "3D controller"
-            if (prefix.equals("Class") && (line.contains("VGA") || line.contains("3D controller"))) {
+            // Skip until we reach a display controller class
+            if (prefix.equals("Class") && isDisplayClass(split.length > 1 ? split[1].trim() : "")) {
                 found = true;
                 // The Slot line precedes Class within a record, so this is the slot of the record
                 // we are entering. Discarding it here would leave every card without a PCI slot,
@@ -370,6 +372,25 @@ public abstract class LinuxGraphicsCard extends AbstractGraphicsCard {
      * @param pciSlot the PCI slot address from lspci (e.g. {@code "01:00.0"}), or {@code null} to use first-match
      * @return triplet of (drmDevicePath, driverName, pciBusId), all empty strings if not found
      */
+    /**
+     * Tests whether an lspci {@code Class:} field value denotes a display controller.
+     * <p>
+     * A plain substring test for "VGA" is not sufficient: PCI class 0x0000 is rendered as
+     * "Non-VGA unclassified device", which contains "VGA" but is not a graphics card. When the numeric class code is
+     * present (lspci {@code -nn}) it is authoritative; PCI base class 0x03 is Display controller.
+     *
+     * @param classValue the trimmed value of an lspci {@code Class:} line
+     * @return true if the class denotes a display controller
+     */
+    static boolean isDisplayClass(String classValue) {
+        Pair<String, String> pair = ParseUtil.parseLspciMachineReadable(classValue);
+        if (pair != null && pair.getB().length() >= 2) {
+            return pair.getB().startsWith("03");
+        }
+        return classValue.startsWith("VGA compatible controller") || classValue.startsWith("3D controller")
+                || classValue.startsWith("Display controller");
+    }
+
     private static Triplet<String, String, String> findDrmInfo(String pciSlot) {
         return findDrmInfo(pciSlot, DRM_PATH);
     }
