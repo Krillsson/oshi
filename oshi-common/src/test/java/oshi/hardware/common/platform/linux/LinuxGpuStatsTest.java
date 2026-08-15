@@ -59,6 +59,11 @@ class LinuxGpuStatsTest {
         }
 
         @Override
+        protected double nvmlGetUtilization(String deviceId) {
+            return -1d;
+        }
+
+        @Override
         protected long nvmlGetVramUsed(String deviceId) {
             return -1L;
         }
@@ -120,6 +125,11 @@ class LinuxGpuStatsTest {
         @Override
         protected String nvmlFindDeviceByName(String name) {
             return "nvml-device-0";
+        }
+
+        @Override
+        protected double nvmlGetUtilization(String deviceId) {
+            return 73.0;
         }
 
         @Override
@@ -206,6 +216,17 @@ class LinuxGpuStatsTest {
 
         try (LinuxGpuStats stats = new StubLinuxGpuStats(device.toString(), "amdgpu", "", "AMD GPU")) {
             assertThat(stats.getGpuUtilization(), closeTo(42.0, EPS));
+        }
+    }
+
+    @Test
+    void testNvmlUtilizationPreferredOverSysfs(@TempDir Path tmp) throws IOException {
+        Path device = tmp.resolve("device");
+        Files.createDirectories(device);
+        writeFile(device.resolve("gpu_busy_percent"), "42\n");
+
+        try (NvmlLinuxGpuStats stats = new NvmlLinuxGpuStats(device.toString(), "amdgpu", "0000:01:00.0", "GPU")) {
+            assertThat(stats.getGpuUtilization(), closeTo(73.0, EPS));
         }
     }
 
@@ -507,6 +528,7 @@ class LinuxGpuStatsTest {
     @Test
     void testNvmlMetrics() {
         try (NvmlLinuxGpuStats stats = new NvmlLinuxGpuStats("", "nvidia", "0000:01:00.0", "NVIDIA GPU")) {
+            assertThat(stats.getGpuUtilization(), closeTo(73.0, EPS));
             assertThat(stats.getVramUsed(), is(2147483648L));
             assertThat(stats.getTemperature(), closeTo(65.0, EPS));
             assertThat(stats.getPowerDraw(), closeTo(120.0, EPS));
@@ -546,6 +568,11 @@ class LinuxGpuStatsTest {
             @Override
             protected String nvmlFindDeviceByName(String name) {
                 return "nvml-by-name";
+            }
+
+            @Override
+            protected double nvmlGetUtilization(String deviceId) {
+                return -1d;
             }
 
             @Override

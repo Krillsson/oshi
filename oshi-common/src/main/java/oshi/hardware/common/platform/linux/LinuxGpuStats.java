@@ -101,6 +101,14 @@ public abstract class LinuxGpuStats implements GpuStats {
     protected abstract String nvmlFindDeviceByName(String name);
 
     /**
+     * Returns GPU core utilization via NVML, or -1.
+     *
+     * @param deviceId NVML device identifier
+     * @return utilization percentage (0-100) or -1
+     */
+    protected abstract double nvmlGetUtilization(String deviceId);
+
+    /**
      * Returns VRAM used in bytes via NVML, or -1.
      *
      * @param deviceId NVML device identifier
@@ -202,6 +210,13 @@ public abstract class LinuxGpuStats implements GpuStats {
     @Override
     public synchronized double getGpuUtilization() {
         checkOpen();
+        String nvmlDevice = findNvmlDevice();
+        if (nvmlDevice != null) {
+            double val = nvmlGetUtilization(nvmlDevice);
+            if (val >= 0) {
+                return val;
+            }
+        }
         if (drmDevicePath.isEmpty()) {
             return -1d;
         }

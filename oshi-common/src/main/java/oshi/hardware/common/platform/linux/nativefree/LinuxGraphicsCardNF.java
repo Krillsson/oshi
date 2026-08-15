@@ -65,6 +65,11 @@ final class LinuxGraphicsCardNF extends LinuxGraphicsCard {
         }
 
         @Override
+        protected double nvmlGetUtilization(String deviceId) {
+            return -1d;
+        }
+
+        @Override
         protected long nvmlGetVramUsed(String deviceId) {
             return -1L;
         }

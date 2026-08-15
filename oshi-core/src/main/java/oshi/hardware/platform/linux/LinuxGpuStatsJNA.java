@@ -34,6 +34,11 @@ final class LinuxGpuStatsJNA extends LinuxGpuStats {
     }
 
     @Override
+    protected double nvmlGetUtilization(String deviceId) {
+        return NvmlUtilJNA.getGpuUtilization(deviceId);
+    }
+
+    @Override
     protected long nvmlGetVramUsed(String deviceId) {
         return NvmlUtilJNA.getVramUsed(deviceId);
     }
