@@ -18,6 +18,17 @@ final class LinuxGpuStatsFFM extends LinuxGpuStats {
         super(drmDevicePath, driverName, pciBusId, cardName);
     }
 
+    /**
+     * TEMPORARY (Krillsson/monitee-agent#341): tags every reading taken through the FFM backend with a fractional
+     * .33, so a verification build can tell at a glance whether the FFM or the JNA provider served the value. Must be
+     * removed before this branch is used for anything but that verification.
+     */
+    @Override
+    public double getGpuUtilization() {
+        double utilization = super.getGpuUtilization();
+        return utilization < 0 ? utilization : Math.floor(utilization) + 0.33;
+    }
+
     @Override
     protected boolean nvmlIsAvailable() {
         return NvmlUtilFFM.isAvailable();
